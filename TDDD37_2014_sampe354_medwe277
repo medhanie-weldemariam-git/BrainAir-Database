@@ -1,0 +1,589 @@
+This is a database management solution project for an airline flight reservation/booking system. It involves EER-modelling, translation of EER into relational tables, MySQL queries, normalisation, stored procedures and transactions.
+
+
+Lab 4 BrianAir Database by Samuel Peers (sampe354) and Medhanie Weldemariam (medwe277)
+
+3.
+
+a) Table Creation
+
+create table person( 
+id int not null, 
+first_name varchar(15),
+street varchar(15), 
+city_name varchar(15), 
+sur_name varchar(15), 
+constraint id_PK 
+primary key (id) 
+); 
+
+
+create table passenger( 
+id int not null, 
+primary key (id), 
+constraint passengerid_FK 
+foreign key (id) references person(id) 
+on delete cascade 
+on update cascade 
+); 
+
+create table customer( 
+id int not null, 
+expmonth varchar(15),
+expyear int,
+creditcardnumber int,
+amountdrawn int default 0,
+primary key (id), 
+constraint customerid_FK 
+foreign key (id) references person(id) 
+); 
+
+create table contact( 
+id int not null, 
+email varchar(15), 
+phone_num int (15), 
+constraint id_PK 
+primary key (id), 
+constraint contactid_FK 
+foreign key (id) references passenger(id) 
+on delete cascade on update cascade 
+); 
+
+create table city( 
+id int not null auto_increment, 
+name varchar(15), 
+constraint id_PK 
+primary key (id) 
+); 
+
+create table route( 
+id int not null AUTO_INCREMENT, 
+price int, 
+from_city int not null, 
+to_city int not null, 
+constraint id_PK primary key (id), 
+constraint routeFROM_FK foreign key(from_city) references city(id) on delete cascade on update cascade, 
+constraint routeTO_FK foreign key(to_city) references city(id) on delete cascade on update cascade 
+); 
+
+create table weeklyFlight( 
+id int not null AUTO_INCREMENT, 
+route int not null, 
+time int, 
+weekday enum('monday','tuesday','wednesday','thursday','friday','saturday','sunday'), 
+constraint id_PK 
+primary key (id), 
+constraint routeID_FK 
+foreign key (route) references route(id) 
+on delete cascade on update cascade 
+); 
+
+create table flight( 
+id int not null, 
+capacity int, 
+weekly_flight_id int not null, 
+date varchar(15), 
+constraint id_PK primary key (id), 
+constraint weeklyFlightID_FK 
+foreign key (weekly_flight_id) references weeklyFlight(id) 
+on delete cascade on update cascade; 
+); 
+
+
+create table reservation( 
+id int not null, 
+price int default 0, 
+seat_num int default 0, 
+flight_id int not null, 
+paid_by int not null, 
+constraint id_PK 
+primary key (id), 
+constraint flightID_FK 
+foreign key (flight_id) references flight(id) 
+on delete cascade on update cascade, 
+constraint paidby_FK 
+foreign key (paid_by) references customer(id) 
+on delete cascade on update cascade 
+); 
+
+
+create table reserved( 
+passenger_id int not create function getRoutePrice(reservationID INT) returns int begin return(  select r.price from route r, weeklyFlight wf, flight f, reservation res where res.id = reservationID and res.flightID = f.id and f.weekly_flight_id = wk.id and wf.route = r.id); end// null, 
+reservation_id int not null, 
+ticket_num int AUTO_INCREMENT, 
+constraint pid_rid_PK primary key (passenger_id, reservation_id), 
+constraint reservedPassengerID_FK foreign key (passenger_id) references passenger(id) 
+on delete cascade on update cascade, 
+constraint reservationID_FK foreign key (reservation_id) references reservation(id) 
+on delete cascade on update cascade 
+); 
+
+
+create table prices( 
+year int(4) not null, 
+passenger_factor decimal(5,2), 
+constraint year_PK 
+primary key (year) 
+); 
+
+create table weekday_factor( 
+year int not null, 
+weekday enum('monday','tuesday','wednesday','thursday','friday','saturday','sunday') not null, 
+weekday_factor int, 
+constraint ywd_PK 
+primary key (year, weekday) 
+); 
+
+create table currentYear( year int not null, constraint year_PK primary key (year) );
+
+alter table passenger add constraint id_FK foreign key(id) references reserved(passenger_id) on delete cascade on update cascade;
+
+b) Insertion of Test-Tuples
+
+insert into prices values(1993, 1.4); 
+
+insert into prices values(1986, 2); 
+
+insert into prices values(2014, 3.1); 
+
+insert into prices values(2015, 3.33); 
+
+mysql> select * from prices; 
++------+------------------+ 
+| year | passenger_factor | 
++------+------------------+ 
+| 1986 |             2.00 | 
+| 1993 |             1.40 | 
+| 2014 |             3.10 | 
+| 2015 |             3.33 | 
++------+------------------+ 
+
+insert into city (name) values('Lillby'); 
+
+insert into city (name) values('Smallville'); 
+mysql> insert into flight (capacity,weekly_flight_id,date) values(300,1,31); 
+Query OK, 1 row affected (0.00 sec) 
+
+mysql> insert into flight (capacity,weekly_flight_id,date) values(90,2,14); 
+Query OK, 1 row affected (0.00 sec) 
+select * from city; 
++----+-------------+ 
+| id | name        | 
++----+-------------+ 
+|  1 | Lillby      | 
+|  2 | Smallville  | 
+|  3 | Winnipeg    | 
+|  4 | Addis Ababa | 
++----+-------------+ 
+
+delimiter // 
+create function getCityID(name CHAR(15)) returns int deterministic return (select id from city where city.name=name)// 
+delimiter ; 
+
+insert into route (price,from_city,to_city) values(50, (select getCityID('Lillby')), (select getCityID('Smallville'))); 
+insert into route (price,from_city,to_city) values(100, (select getCityID('Winnipeg')), (select getCityID('Addis Ababa'))); 
+insert into route (price,from_city,to_city) values(200, (select getCityID('Smallville')), (select getCityID('Lillby'))); 
+
+
+mysql> select * from route; 
++----+-------+-----------+---------+ 
+| id | price | from_city | to_city | 
++----+-------+-----------+---------+ 
+|  1 |    50 |         1 |       2 | 
+|  2 |   100 |         3 |       4 | 
+|  3 |   200 |         2 |       1 | 
++----+-------+-----------+---------+ 
+
+insert into weekday_factor values(1986, 'monday', 2); 
+
+insert into weekday_factor values(1986, 'tuesday', 1); 
+
+insert into weekday_factor values(1986, 'wednesday', 1); 
+
+insert into weekday_factor values(1986, 'thursday', 3); 
+
+insert into weekday_factor values(1986, 'friday', 4); 
+
+insert into weekday_factor values(1986, 'saturday', 5); 
+
+insert into weekday_factor values(1986, 'sunday', 6); 
+
+insert into weekday_factor values(1993, 'monday', 2); 
+
+insert into weekday_factor values(1993, 'tuesday', 3); 
+
+insert into weekday_factor values(1993, 'wednesday', 3); 
+
+insert into weekday_factor values(1993, 'thursday', 4); 
+
+insert into weekday_factor values(1993, 'friday', 6); 
+
+insert into weekday_factor values(1993, 'saturday', 7); 
+
+insert into weekday_factor values(1993, 'sunday', 8); 
+
+insert into weekday_factor values(2014, 'monday', 2); 
+
+insert into weekday_factor values(2014, 'tuesday', 2); 
+
+insert into weekday_factor values(2014, 'wednesday', 1); 
+
+insert into weekday_factor values(2014, 'thursday', 3); 
+
+insert into weekday_factor values(2014, 'friday', 5); 
+
+insert into weekday_factor values(2014, 'saturday', 8); 
+
+insert into weekday_factor values(2014, 'sunday', 7); 
+
+insert into weekday_factor values(2015, 'monday', 2); 
+
+insert into weekday_factor values(2015, 'tuesday', 2); 
+
+insert into weekday_factor values(2015, 'wednesday', 1); 
+
+insert into weekday_factor values(2015, 'thursday', 3); 
+
+insert into weekday_factor values(2015, 'friday', 6); 
+
+insert into weekday_factor values(2015, 'saturday', 7); 
+
+insert into weekday_factor values(2015, 'sunday', 7); 
+
+
+
+create function getRouteID(fromCity CHAR(15), toCity CHAR(15)) 
+returns int deterministic 
+return ( 
+select route.id 
+from route, city c1, city c2 
+where (route.from_city = c1.id and c1.name = fromCity) and (route.to_city = c2.id and c2.name = toCity) 
+); 
+
+insert into weeklyFlight (route, time, weekday) values(getRouteID('Smallville','Lillby'),1300,'monday'); 
+
+insert into weeklyFlight (route, time, weekday) values(getRouteID('Winnipeg','Addis Ababa'),800,'sunday'); 
+
+insert into weeklyFlight (route, time, weekday) values(getRouteID('Lillby','Smallville'),1500,'friday'); 
+
+
+mysql> select * from weeklyFlight; 
++----+-------+------+---------+ 
+| id | route | time | weekday | 
++----+-------+------+---------+ 
+|  1 |     1 | 1300 | monday  | 
+|  2 |     2 |  800 | sunday  | 
+|  4 |     3 | 1500 | friday  | 
++-----------------------------+
+
+insert into flight (capacity,weekly_flight_id,date) values(300,45,31); 
+
+insert into flight (capacity,weekly_flight_id,date) values(300,1,31); 
+
+insert into flight (capacity,weekly_flight_id,date) values(90,2,14); 
+
+mysql> select * from flight;                                                
++----+----------+------------------+------+ 
+| id | capacity | weekly_flight_id | date | 
++----+----------+------------------+------+ 
+|  1 |      200 |                4 | 15   | 
+|  4 |      300 |                1 | 31   | 
+|  5 |       90 |                2 | 14   | 
++----+----------+------------------+------+ 
+
+
+4.
+
+a) Create Reservation - stored procedure
+
+For our database design, the user first creates a reservation for an existing flight. Thus the createReservation procedure must be provided with a valid flight ID. If the flight ID does not exist, the reservation is not created and nothing happens.
+
+delimiter //
+create procedure createReservation(id INT) begin 
+if exists(select id from flight where flight.id = id) then   
+insert into reservation (flight_id) values(id);  end if; 
+end// 
+delimiter ;
+
+b) Add person and contact to a Reservation - stored procedure
+
+A person can be added to any existing reservation. The user must provide their person ID and the reservation ID if they wish to be added a reservation. The person ID must exist as must the reservation ID. If neither exist, the person is not added to reservation and nothing happens. Additionally, there must be enough unpaid seats available on the corresponding flight for the reservation if not, the person is not added to reservation and nothing happens. 
+
+delimiter //
+create procedure addPersonToReservation(personID INT, reservationID INT) 
+begin 
+    if exists (select id from person where personID = person.id) then 
+        if exists (select id from reservation where reservationID = reservation.id) then 
+           if (getNumAvailableSeats((select f.id from flight f,reservation r where r.id = reservationID and r.flight_id=f.id)) > 0) then
+               insert into reserved (passenger_id, reservation_id) values(personID, reservationID); 
+               insert into passenger values(personID); 
+               update flight, reservation set flight.price = getPrice(flight.id) where reservation.id = reservationID and reservation.flight_id = flight.id; 
+           end if;
+       end if; 
+    end if; 
+end//
+delimiter ;
+
+A passenger must be assigned as a contact for an existing reservation. The reservation cannot be paid for until a contact has been assigned. A contact cannot be assigned unless they are a passenger for the given reservation. Additionally the reservation must exist. 
+
+create procedure assignContact(passengerID INT, reservationID INT, email varchar(15), phoneNum INT) 
+begin 
+if exists(select * from reserved where reserved.passenger_id = passengerID and reserved.reservation_id = reservationID) then 
+          insert into contact values(passengerID,email,phoneNum); 
+end if; 
+end// 
+
+When a person is added to a reservation, there is an insertion on the reserved table. This activates a trigger that increments the number of seats for a reservation (seat_num+1).
+
+create trigger updateNumSeats BEFORE insert on reserved
+for each row
+begin
+   update reservation set seat_num = seat_num+1 where reservation.id = 
+   NEW.reservation_id;
+end//
+
+
+
+c) Add payment Details
+
+When a person pays for a reservation, they must provide their payment details. Only when a reservation has a contact and the reservation has the correct number of seats for the attribute seat_num (determined by the function isReadytobePaid) can the reservation be paid for. If not, no reservation is paid for and nothing happens. Additionally the person ID must exist as must the reservation ID.
+
+delimiter //
+create procedure payForReservation(personID INT, reservationID INT, expyear INT, creditcardnumber int, expmonth varchar(15)) 
+begin 
+   if(isReadytobePaid(reservationID)) then
+        if exists(select id from person where id = personID) then    
+             if exists(select id from reservation where id = reservationID) then 
+                    if (getNumAvailableSeats((select f.id from flight f,reservation r where r.id = reservationID and r.flight_id=f.id)) >= (select seat_num from reservation where reservation.id=reservationID)) then
+                    insert into customer (id, expyear, creditcardnumber, expmonth) values(personID, expyear, creditcardnumber, expmonth); 
+                    update reservation set paid_by = personID where reservation.id=reservationID;      
+               end if; 	  		  
+           end if; 
+     end if; 
+  end if;
+end// 
+
+For security, we would create a view based on the customer table. The view would contain only the customers name (id). This view would be visible to all users while the table for customers is only visible to administrators.
+
+
+d) Assign Ticket Numbers
+
+When a reservation is updated, the ticket numbers are assigned to the passengers that correspond to the reservation that has been paid for. The function we use for the ticket number is FLOOR(1+RAND()*60)+(passenger_id). By adding the passenger_id to the ticket number, we make the ticket number unique as passenger_id is a primary key.  
+
+create trigger assignTicketNums BEFORE update on reservation 
+for each row 
+begin 
+           if(OLD.paid_by is NULL and NEW.paid_by is not NULL) then
+              update reservation,reserved,passenger set reserved.ticket_num=FLOOR(1+RAND()*60)+(passenger_id) where reserved.reservation_id = reservation.id and OLD.paid_by is NULL and NEW.paid_by is not NULL;  
+          end if;
+end//
+
+e) Three reasons why processing should be done in stored procedures rather than java-script.
+A stored procedure is stored on the server for reuse, whereas a script is not pre-compiled and is run adhoc, which means it is not stored on the server and is thus not well suited for reuse.
+Stored procedures enable better security models than can java-scripts.
+Stored procedures are more readable than java-scripts.
+
+
+5. Queries to confirm that Reservation is ready to be paid for
+
+The following code checks if a given reservation has a contact and whether the reservation has the correct number of seats listed. This function was added to the appropriate procedures.
+
+create function isReadytobePaid(reservationID INT) 
+returns bool 
+return( 
+     exists( 
+           select reservation.id from reservation, reserved, passenger, contact where 
+           reservation.id = reservationID and reservation.id = reserved.reservation_id and reserved.passenger_id = passenger.id and passenger.id = contact.id 
+               ) 
+       and 
+       exists( 
+           select reservation.id from reservation where reservation.id = reservationID and seat_num = (select count(*) from reserved where reserved.reservation_id = reservationID) 
+           ) 
+)// 
+            
+6. Get available seats procedures
+
+The function getNumAvailableSeats returns the number of unpaid seats available on a flight. It uses the function getTotalNumPaidSeats which returns the total number of paid seats for a given flight. We then do capacity – the total number of paid seats to get the total number of available seats.
+
+create function getTotalNumPaidSeats(flightID INT) 
+returns INT 
+begin 
+    if ((select sum(seat_num) from reservation where reservation.flight_id=flightID and reservation.paid_by is not NULL) is NULL) then 
+        return 0; 
+    else 
+       return (select sum(seat_num) from reservation where reservation.flight_id=flightID and reservation.paid_by is not NULL); 
+    end if; 
+end// 
+
+create function getNumAvailableSeats(flightID INT)
+returns INT deterministic
+return(
+(select capacity from flight where flight.id=flightID) - getTotalNumPaidSeats(flightID))//
+
+
+
+7. Calculate Price
+
+The following functions calculate the price for a given flight. Also, we created a function called getReservtionPrice which is calculated as the flight cost multiplied by the number of seats for a reservation. 
+
+create function getRoutePrice(flightID INT) 
+returns int 
+begin 
+return(  
+select r.price from route r, weeklyFlight wf, flight f where f.id = flightID and f.weekly_flight_id = wf.id and wf.route = r.id); 
+end// 
+
+create function getWeekdayFactor(flightID INT) 
+returns INT begin return(  
+select wdf.weekday_factor 
+from weekday_factor wdf, weeklyFlight wf, flight f
+where f.id = flightID and f.weekly_flight_id = wf.id and wf.weekday = wdf.weekday and wdf.year = YEAR(CURDATE())
+); end// 
+
+create function getSeatingFactor(flightID INT) returns FLOAT
+begin 
+if
+((select sum(reservation.seat_num) from reserved,reservation where reservation.flight_id=flightID) is not NULL) then
+return
+((select sum(reservation.seat_num) from reserved,reservation where reservation.flight_id=flightID)+1.0)/60;
+else
+return 0;
+end if; 
+end// 
+
+create function getPassengerFactor()
+returns FLOAT
+return(
+   select passenger_factor from prices where prices.year = YEAR(CURDATE())
+)//
+
+create function getPrice(flightID INT) 
+returns DECIMAL(15,2) 
+begin
+if exists (select id from flight where id=flightID) then
+   return
+   (
+       (getRoutePrice(flightID))*(getWeekdayFactor(flightID))*(getSeatingFactor(flightID))*
+       (getPassengerFactor())
+    );
+else
+   return 0;
+end if;
+end// 
+
+The price of a flight is updated every time a passenger is added to a reservation that corresponds to the flight.
+
+create procedure updatePrice(flightID INT)
+begin
+update flight set price = getPrice(flightID) where flight.id = flightID;
+end//
+
+create function getReservationPrice(reservationID INT)
+returns DECIMAL(15,2)
+begin
+return
+( (select flight.price from flight, reservation where reservation.id = reservationID and flight.id = reservation.flight_id) * (select seat_num from reservation where reservation.id = reservationID) );
+end//
+
+8. Fetch flight details
+
+create procedure getFlightDetails(depart VARCHAR(15), arrival VARCHAR(15), numPassengers INT, date int)
+begin
+select f.date AS date, (f.price*numPassengers) AS price, getNumAvailableSeats(f.id) AS Number_of_Available_Seats 
+from flight f, weeklyFlight wf
+where getRouteID(depart, arrival) = wf.route and wf.id = f.weekly_flight_id and f.date = date;
+end//
+
+9.
+
+We set autocommit to 0 for both mysql sessions; set autocommit=0.
+
+a) Add a new reservation 
+In session A:
+
+call createReservation(1)//
+select * from reservation// 
++----+----------+-----------+---------+ 
+| id | seat_num | flight_id | paid_by | 
++----+----------+-----------+---------+ 
+|  7 |        0 |         1 |    NULL | 
+|  8 |        0 |         5 |    NULL | 
+|  9 |        0 |         1 |    NULL | 
++----+----------+-----------+---------+ 
+
+Note that the last one in the list, with id number 9, is the new reservation we just added to the table.
+
+b) Displaying reservations in session B
+In session B:
+
+select * from reservation//
++----+----------+-----------+---------+ 
+| id | seat_num | flight_id | paid_by | 
++----+----------+-----------+---------+ 
+|  7 |        0 |         1 |    NULL | 
+|  8 |        0 |         5 |    NULL | 
++----+----------+-----------+---------+ 
+
+Notice that the new reservation with id number 9 added in session A is not visible here in session B. The reason is that the transaction (call createReservation(1)) carried out in session A was not committed. Hence, the update was not stored on disk and so we cannot see this update in session B.
+Had we done this:
+
+start transaction; 
+call createReservation(1)
+commit;//
+
+the transaction would have been written to disk and we would be able to see the update in session B.
+
+c) Attempting to modify the new reservation created in A in session B.
+
+When we try to modify the reservation created in session A in session B we get a timeout error.
+In session B:
+update reservation set flight_id=4 where id=9; 
+ERROR 1205 (HY000): Lock wait timeout exceeded; try restarting transaction 
+
+We believe this error occurs because there is a lock put on the reservation table in session A and after the transaction it is not unlocked. So, in session B, when we try to read-write on the reservation table, there is a timeout and the transaction is not successful.
+
+d) Resolution
+
+We would simply manually commit the reservation if it was successful and rollback the transaction if it was unsuccesful. 
+
+10)
+
+First we set autocommit to be 0 in both sessions then we created a flight that only has enough seats 
+ for 1 person. We then created two reservations for this tiny airplane and assigned contacts to the reservation so it could be paid for. We then call the procedure payForReservation(personID, reservationID, payment details...). The way our database is set up, booking a reservation is done by paying for the seat, thus when two people attempt to pay for a seat at the same time, only one person can get it.
+
+a) A scenario in which overbooking can occur
+Let us again use our tiny airplane with one seat. Say person X has reserved a seat on flight 12 and has paid for that seat, thus the entire airplane is now at capacity and person X has booked the one seat. Imagine this transaction is not committed. Now person Y attempts to book a seat on the same plane and is successful as the previous booking was not written to disk. As a result, the airplane is now overbooked.
+
+
+In session A:
+set autocommit=0;
+call addPersonToReservation(1, 17);
+call assignContact(1, 17, 'sampe354@student.liu.se', 070075921);
+call payForReservation(1, 17, 2017, 123456789, 'Jan'); 
+
+In session B:
+set autocommit=0;
+call addPersonToReservation(2, 15);
+call assignContact(2, 15,'medwe277@student.liu.se', 070089212);
+call payForReservation(2, 15, 2019, 234123123, 'Mar'); 
+
+
+Now both people have booked the same, one seat. Thus the flight is overbooked.
+     
+
+b) A solution to prevent over booking (and any possible deadlocks)
+
+start transaction; 
+LOCK TABLES reservation r WRITE, customer WRITE, flight f WRITE, flight WRITE, contact WRITE, person WRITE, reserved WRITE; 
+call payForReservation(2,13,1993,1111,'jan'); 
+commit;
+unlock tables; 
+
+ 
+c) Why the scenario in a) cannot happen now using the solution b)
+
+With the locking of the tables before the transaction and the unlocking of the tables after the transaction, only one transaction has priority on the tables. Thus, unlike in the scenario in a), once session A has booked the one seat, the transaction is written to disk and all the tables are unlocked. So when session B tries to book the one seat, he has the chance to attempt to do so but will be unsuccessful as the number of available seats is correctly set to zero.
+
+
+
+
